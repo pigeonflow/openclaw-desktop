@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, X } from "lucide-react";
+import { Search, SearchX, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
@@ -92,7 +92,7 @@ export default function Skills() {
 
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
-          <div className="text-4xl mb-3">🔍</div>
+          <SearchX size={40} className="mx-auto mb-3 text-gray-300" />
           <div className="font-medium">No skills found</div>
           <div className="text-sm mt-1">Try a different search term</div>
         </div>

@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 
 export type GatewayStatus = "checking" | "up" | "down";
 
-const GATEWAY_URL = "http://localhost:18789";
 const POLL_INTERVAL_UP = 10_000;
 const POLL_INTERVAL_DOWN = 2_000;
 
@@ -11,13 +10,15 @@ export function useGatewayStatus() {
 
   const check = useCallback(async () => {
     try {
-      const res = await fetch(`${GATEWAY_URL}/`, {
+      const res = await fetch("/gateway/health", {
         signal: AbortSignal.timeout(3000),
-        mode: "no-cors", // gateway may not send CORS headers
       });
-      // no-cors gives opaque response — if no throw, it's reachable
-      void res;
-      setStatus("up");
+      if (res.ok) {
+        const data = await res.json() as { ok?: boolean };
+        setStatus(data.ok ? "up" : "down");
+      } else {
+        setStatus("down");
+      }
     } catch {
       setStatus("down");
     }

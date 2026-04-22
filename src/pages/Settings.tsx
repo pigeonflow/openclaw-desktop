@@ -4,16 +4,21 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-
-const DEFAULT_TOKEN = "REDACTED_TOKEN";
+import { getGatewayToken, getGatewayUrl } from "@/lib/config";
 
 export default function Settings() {
   const [gatewayToken, setGatewayToken] = useState("");
+  const [configToken, setConfigToken] = useState("");
+  const [gatewayUrl, setGatewayUrl] = useState("http://localhost:18789");
   const [showToken, setShowToken] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    setGatewayToken(localStorage.getItem("openclaw-gateway-token") ?? "");
+    getGatewayToken().then((t) => {
+      setConfigToken(t);
+      setGatewayToken(localStorage.getItem("openclaw-gateway-token") ?? "");
+    });
+    getGatewayUrl().then(setGatewayUrl);
   }, []);
 
   function showToast(msg: string) {
@@ -52,21 +57,21 @@ export default function Settings() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Gateway Configuration</CardTitle>
-            <CardDescription>Override the default gateway connection settings</CardDescription>
+            <CardDescription>Read from openclaw.json — override token via the field below if needed</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1.5">
                 Gateway URL
               </label>
-              <Input value="http://localhost:18789" readOnly className="bg-gray-50 text-gray-500" />
+              <Input value={gatewayUrl} readOnly className="bg-gray-50 text-gray-500" />
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1.5">
                 Bearer Token
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                Leave blank to use the default token. Only change if you have a custom token.
+                Leave blank to use the token from openclaw.json. Only set if you need to override it.
               </p>
               <div className="flex gap-2">
                 <div className="relative flex-1">
@@ -74,7 +79,7 @@ export default function Settings() {
                     type={showToken ? "text" : "password"}
                     value={gatewayToken}
                     onChange={(e) => setGatewayToken(e.target.value)}
-                    placeholder={DEFAULT_TOKEN.slice(0, 8) + "…"}
+                    placeholder={configToken ? configToken.slice(0, 8) + "…" : "token from openclaw.json"}
                     className="pr-10"
                   />
                   <button

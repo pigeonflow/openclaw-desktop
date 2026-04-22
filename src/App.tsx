@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-shell";
 import { MessageCircle, Plug, Puzzle, Code2, Settings, Circle, ExternalLink } from "lucide-react";
 import { useGatewayStatus } from "./useGatewayStatus";
+import { getGatewayToken, getGatewayUrl } from "./lib/config";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,9 +29,6 @@ const NAV_ITEMS: NavItem[] = [
   { id: "settings", label: "Settings", icon: <Settings size={16} /> },
 ];
 
-const GATEWAY_URL = "http://localhost:18789";
-const GATEWAY_TOKEN = "REDACTED_TOKEN";
-
 function LoadingScreen({ message = "Starting up…" }: { message?: string }) {
   return (
     <div className="loading-screen">
@@ -50,19 +48,26 @@ function LoadingScreen({ message = "Starting up…" }: { message?: string }) {
 
 function DeveloperPage({ gatewayUp }: { gatewayUp: boolean }) {
   const [copied, setCopied] = useState(false);
+  const [token, setToken] = useState("");
+  const [gatewayUrl, setGatewayUrl] = useState("http://localhost:18789");
+
+  useEffect(() => {
+    getGatewayToken().then((t) => setToken(localStorage.getItem("openclaw-gateway-token") || t));
+    getGatewayUrl().then(setGatewayUrl);
+  }, []);
 
   async function openGateway() {
     try {
-      await navigator.clipboard.writeText(GATEWAY_TOKEN);
+      await navigator.clipboard.writeText(token);
       setCopied(true);
       setTimeout(() => setCopied(false), 4000);
     } catch {
       // clipboard not available, proceed anyway
     }
-    open(GATEWAY_URL).catch(() => window.open(GATEWAY_URL));
+    open(gatewayUrl).catch(() => window.open(gatewayUrl));
   }
 
-  const tokenMasked = GATEWAY_TOKEN.slice(0, 8) + "…" + GATEWAY_TOKEN.slice(-6);
+  const tokenMasked = token ? token.slice(0, 8) + "…" + token.slice(-6) : "—";
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
@@ -84,7 +89,7 @@ function DeveloperPage({ gatewayUp }: { gatewayUp: boolean }) {
           <CardContent className="space-y-0">
             <div className="flex justify-between items-center py-2.5 border-b border-gray-100">
               <span className="text-sm font-medium text-gray-600">URL</span>
-              <span className="text-sm font-mono text-gray-800">{GATEWAY_URL}</span>
+              <span className="text-sm font-mono text-gray-800">{gatewayUrl}</span>
             </div>
             <div className="flex justify-between items-center py-2.5 border-b border-gray-100">
               <span className="text-sm font-medium text-gray-600">Health endpoint</span>
@@ -121,7 +126,7 @@ function DeveloperPage({ gatewayUp }: { gatewayUp: boolean }) {
           <Card className="border-amber-200 bg-amber-50">
             <CardContent className="pt-4 pb-4">
               <CardDescription className="text-amber-700 text-center">
-                Gateway is offline. Waiting for it to start at {GATEWAY_URL}…
+                Gateway is offline. Waiting for it to start at {gatewayUrl}…
               </CardDescription>
             </CardContent>
           </Card>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getGatewayToken } from "@/lib/config";
 
 interface Message {
   id: string;
@@ -11,14 +12,15 @@ interface Message {
 }
 
 const STORAGE_KEY = "openclaw-chat";
-const GATEWAY_TOKEN = "REDACTED_TOKEN";
 
-const WELCOME: Message = {
-  id: "welcome",
-  role: "assistant",
-  content: "Hey! I'm your OpenClaw assistant. How can I help you today?",
-  timestamp: Date.now(),
-};
+function makeWelcome(): Message {
+  return {
+    id: "welcome",
+    role: "assistant",
+    content: "Hey! I'm your OpenClaw assistant. How can I help you today?",
+    timestamp: Date.now(),
+  };
+}
 
 function TypingIndicator() {
   return (
@@ -43,11 +45,16 @@ export default function Chat() {
     } catch {
       // ignore
     }
-    return [WELCOME];
+    return [makeWelcome()];
   });
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [gatewayToken, setGatewayToken] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    getGatewayToken().then((t) => setGatewayToken(localStorage.getItem("openclaw-gateway-token") || t));
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
@@ -76,7 +83,7 @@ export default function Chat() {
       .map((m) => ({ role: m.role, content: m.content }));
 
     try {
-      const token = localStorage.getItem("openclaw-gateway-token") || GATEWAY_TOKEN;
+      const token = gatewayToken;
       const r = await fetch("/gateway/v1/chat/completions", {
         method: "POST",
         headers: {

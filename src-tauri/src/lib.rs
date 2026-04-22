@@ -49,9 +49,15 @@ fn check_openclaw_configured() -> bool {
     }
     std::fs::read_to_string(&config)
         .map(|s| {
+            // Configured if any provider OR channel exists
             s.contains("\"providers\"")
                 || s.contains("\"openrouter\"")
                 || s.contains("\"github-copilot\"")
+                || s.contains("\"anthropic\"")
+                || s.contains("\"channels\"")
+                || s.contains("\"telegram\"")
+                || s.contains("\"slack\"")
+                || s.contains("\"whatsapp\"")
         })
         .unwrap_or(false)
 }
@@ -83,11 +89,25 @@ fn get_channels() -> String {
     }
 }
 
+#[tauri::command]
+fn get_config() -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let config_path = format!("{}/.openclaw/openclaw.json", home);
+    std::fs::read_to_string(&config_path).unwrap_or_else(|_| "{}".to_string())
+}
+
+fn is_gateway_running(port: u16) -> bool {
+    std::net::TcpStream::connect(format!("127.0.0.1:{}", port))
+        .map(|_| true)
+        .unwrap_or(false)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             get_channels,
+            get_config,
             check_openclaw_installed,
             get_platform,
             install_openclaw_mac,
@@ -99,20 +119,24 @@ pub fn run() {
         .setup(|app| {
             let shell = app.shell();
 
-            // Spawn the openclaw gateway sidecar.
-            // Tauri resolves "binaries/openclaw" → binaries/openclaw-<triple> at runtime.
-            match shell
-                .sidecar("binaries/openclaw")
-                .expect("failed to create openclaw sidecar command")
-                .args(["gateway", "run"])
-                .spawn()
-            {
-                Ok((_rx, _child)) => {
-                    println!("[openclaw] gateway sidecar started");
-                }
-                Err(e) => {
-                    eprintln!("[openclaw] failed to start gateway sidecar: {e}");
-                    eprintln!("[openclaw] the app will still launch — check that openclaw is installed");
+            if is_gateway_running(18789) {
+                println!("[openclaw] gateway already running on port 18789, skipping sidecar");
+            } else {
+                // Spawn the openclaw gateway sidecar.
+                // Tauri resolves "binaries/openclaw" → binaries/openclaw-<triple> at runtime.
+                match shell
+                    .sidecar("binaries/openclaw")
+                    .expect("failed to create openclaw sidecar command")
+                    .args(["gateway", "run"])
+                    .spawn()
+                {
+                    Ok((_rx, _child)) => {
+                        println!("[openclaw] gateway sidecar started");
+                    }
+                    Err(e) => {
+                        eprintln!("[openclaw] failed to start gateway sidecar: {e}");
+                        eprintln!("[openclaw] the app will still launch — check that openclaw is installed");
+                    }
                 }
             }
 
