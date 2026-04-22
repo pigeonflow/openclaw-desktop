@@ -8,6 +8,10 @@ import {
   IconSettings,
   IconRefresh,
 } from "./icons";
+import Chat from "./pages/Chat";
+import ConnectedApps from "./pages/ConnectedApps";
+import Skills from "./pages/Skills";
+import Settings from "./pages/Settings";
 
 type NavId = "chat" | "apps" | "skills" | "developer" | "settings";
 
@@ -31,32 +35,16 @@ const GATEWAY_URL = "http://localhost:18789";
 function LoadingScreen() {
   return (
     <div className="loading-screen">
-      <div className="logo">OpenClaw</div>
+      <div className="loading-logo">
+        <span className="logo-claw">🦞</span>
+        <span className="logo-text">OpenClaw</span>
+      </div>
       <div className="dots">
         <div className="dot" />
         <div className="dot" />
         <div className="dot" />
       </div>
-      <div className="message">Starting gateway&hellip;</div>
-    </div>
-  );
-}
-
-// --- Placeholder Page ---
-function PlaceholderPage({
-  icon,
-  title,
-  desc,
-}: {
-  icon: string;
-  title: string;
-  desc: string;
-}) {
-  return (
-    <div className="placeholder-page">
-      <div className="page-icon">{icon}</div>
-      <div className="page-title">{title}</div>
-      <div className="page-desc">{desc}</div>
+      <div className="loading-message">Starting up&hellip;</div>
     </div>
   );
 }
@@ -104,7 +92,7 @@ function StatusDot({ status }: { status: "up" | "down" | "checking" }) {
       ? "Gateway running"
       : status === "down"
         ? "Gateway offline"
-        : "Checking gateway…";
+        : "Checking…";
   return (
     <div className="sidebar-footer">
       <div className={`status-dot ${status}`} />
@@ -119,7 +107,6 @@ export default function App() {
   const [activeNav, setActiveNav] = useState<NavId>("chat");
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
-  // Show loading screen until gateway is up or 8 seconds pass
   useEffect(() => {
     if (gatewayStatus === "up") {
       setIsInitialLoading(false);
@@ -136,39 +123,15 @@ export default function App() {
   const renderContent = () => {
     switch (activeNav) {
       case "chat":
-        return (
-          <PlaceholderPage
-            icon="💬"
-            title="Chat"
-            desc="AI chat interface — coming in Phase 2"
-          />
-        );
+        return <Chat />;
       case "apps":
-        return (
-          <PlaceholderPage
-            icon="🔌"
-            title="Connected Apps"
-            desc="Manage your connected integrations — coming in Phase 2"
-          />
-        );
+        return <ConnectedApps />;
       case "skills":
-        return (
-          <PlaceholderPage
-            icon="⭐"
-            title="Skills"
-            desc="Browse and manage AI skills — coming in Phase 2"
-          />
-        );
+        return <Skills />;
       case "developer":
         return <DeveloperPage gatewayUp={gatewayStatus === "up"} />;
       case "settings":
-        return (
-          <PlaceholderPage
-            icon="⚙️"
-            title="Settings"
-            desc="App and gateway settings — coming in Phase 2"
-          />
-        );
+        return <Settings />;
     }
   };
 
@@ -176,7 +139,10 @@ export default function App() {
     <div className="app-layout">
       <nav className="sidebar">
         <div className="sidebar-header">
-          <div className="sidebar-logo">OpenClaw</div>
+          <div className="sidebar-logo">
+            <span className="logo-emoji">🦞</span>
+            <span>OpenClaw</span>
+          </div>
           <div className="sidebar-subtitle">Desktop v0.1</div>
         </div>
         <div className="sidebar-nav">
