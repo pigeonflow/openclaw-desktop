@@ -1,135 +1,156 @@
 import { useState, useEffect } from "react";
+import { Eye, EyeOff, Trash2, Save } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 
-const MODELS = [
-  { value: "meta-llama/llama-3.1-8b-instruct:free", label: "Llama 3.1 8B (Free)" },
-  { value: "google/gemma-2-9b-it:free", label: "Gemma 2 9B (Free)" },
-  { value: "mistralai/mistral-7b-instruct:free", label: "Mistral 7B (Free)" },
-];
+const DEFAULT_TOKEN = "REDACTED_TOKEN";
 
 export default function Settings() {
-  const [apiKey, setApiKey] = useState("");
-  const [showKey, setShowKey] = useState(false);
-  const [model, setModel] = useState(MODELS[0].value);
-  const [toast, setToast] = useState(false);
+  const [gatewayToken, setGatewayToken] = useState("");
+  const [showToken, setShowToken] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    setApiKey(localStorage.getItem("openclaw-api-key") ?? "");
-    setModel(localStorage.getItem("openclaw-model") ?? MODELS[0].value);
+    setGatewayToken(localStorage.getItem("openclaw-gateway-token") ?? "");
   }, []);
 
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  }
+
   function save() {
-    localStorage.setItem("openclaw-api-key", apiKey);
-    localStorage.setItem("openclaw-model", model);
-    setToast(true);
-    setTimeout(() => setToast(false), 2500);
+    if (gatewayToken.trim()) {
+      localStorage.setItem("openclaw-gateway-token", gatewayToken.trim());
+    } else {
+      localStorage.removeItem("openclaw-gateway-token");
+    }
+    showToast("Settings saved!");
   }
 
   function clearChat() {
     localStorage.removeItem("openclaw-chat");
-    setToast(true);
-    setTimeout(() => setToast(false), 2500);
+    showToast("Chat history cleared!");
+  }
+
+  function resetToken() {
+    setGatewayToken("");
+    localStorage.removeItem("openclaw-gateway-token");
+    showToast("Token reset to default");
   }
 
   return (
-    <div className="settings-page">
-      <div className="page-header">
-        <h1 className="page-title">Settings</h1>
-        <p className="page-subtitle">Customize your OpenClaw experience</p>
+    <div className="p-6 max-w-2xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+        <p className="text-sm text-gray-500 mt-1">Customize your OpenClaw experience</p>
       </div>
 
-      <div className="settings-body">
-        <section className="settings-section">
-          <h2 className="section-title">🤖 AI Configuration</h2>
+      <div className="space-y-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Gateway Configuration</CardTitle>
+            <CardDescription>Override the default gateway connection settings</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1.5">
+                Gateway URL
+              </label>
+              <Input value="http://localhost:18789" readOnly className="bg-gray-50 text-gray-500" />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1.5">
+                Bearer Token
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Leave blank to use the default token. Only change if you have a custom token.
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showToken ? "text" : "password"}
+                    value={gatewayToken}
+                    onChange={(e) => setGatewayToken(e.target.value)}
+                    placeholder={DEFAULT_TOKEN.slice(0, 8) + "…"}
+                    className="pr-10"
+                  />
+                  <button
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    onClick={() => setShowToken(!showToken)}
+                    type="button"
+                  >
+                    {showToken ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                {gatewayToken && (
+                  <Button variant="outline" size="sm" onClick={resetToken} className="shrink-0">
+                    Reset
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-          <div className="setting-row">
-            <label className="setting-label">OpenRouter API Key</label>
-            <p className="setting-hint">
-              Used to access AI models. Get yours free at openrouter.ai
-            </p>
-            <div className="key-input-wrapper">
-              <input
-                type={showKey ? "text" : "password"}
-                className="setting-input"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-or-..."
-              />
-              <button
-                className="show-key-btn"
-                onClick={() => setShowKey(!showKey)}
-                aria-label={showKey ? "Hide API key" : "Show API key"}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Data & Privacy</CardTitle>
+            <CardDescription>Manage your locally stored data</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-gray-700">Chat History</div>
+                <div className="text-xs text-gray-500 mt-0.5">Clear all saved messages from your chat</div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearChat}
+                className="text-red-600 border-red-200 hover:bg-red-50 gap-2"
               >
-                {showKey ? "🙈" : "👁️"}
-              </button>
+                <Trash2 size={14} />
+                Clear
+              </Button>
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          <div className="setting-row">
-            <label className="setting-label">Default Model</label>
-            <p className="setting-hint">The AI model used for your conversations</p>
-            <select
-              className="setting-select"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-            >
-              {MODELS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </section>
-
-        <section className="settings-section">
-          <h2 className="section-title">🔧 Workspace</h2>
-          <div className="setting-row">
-            <label className="setting-label">Gateway URL</label>
-            <p className="setting-hint">The local gateway server address (read-only)</p>
-            <input
-              type="text"
-              className="setting-input readonly"
-              value="http://localhost:18789"
-              readOnly
-            />
-          </div>
-        </section>
-
-        <section className="settings-section">
-          <h2 className="section-title">🧹 Data</h2>
-          <div className="setting-row">
-            <label className="setting-label">Chat History</label>
-            <p className="setting-hint">Clear all saved messages from your chat</p>
-            <button className="danger-btn" onClick={clearChat}>
-              Clear Chat History
-            </button>
-          </div>
-        </section>
-
-        <section className="settings-section about-section">
-          <h2 className="section-title">ℹ️ About</h2>
-          <div className="about-grid">
-            <div className="about-item">
-              <span className="about-label">App</span>
-              <span className="about-value">OpenClaw Desktop</span>
+        <Card>
+          <CardContent className="pt-5">
+            <div className="text-sm font-semibold text-gray-700 mb-3">About</div>
+            <Separator className="mb-3" />
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">App</span>
+                <span className="font-medium text-gray-800">OpenClaw Desktop</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Version</span>
+                <span className="font-medium text-gray-800">0.1.0</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Built with</span>
+                <span className="font-medium text-gray-800">Tauri v2 + React + TypeScript</span>
+              </div>
             </div>
-            <div className="about-item">
-              <span className="about-label">Version</span>
-              <span className="about-value">0.1.0</span>
-            </div>
-            <div className="about-item">
-              <span className="about-label">Built with</span>
-              <span className="about-value">Tauri v2 + React + TypeScript</span>
-            </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        <button className="save-btn" onClick={save}>
-          Save Settings ✓
-        </button>
+        <Button
+          onClick={save}
+          className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+          size="lg"
+        >
+          <Save size={16} />
+          Save Settings
+        </Button>
       </div>
 
-      {toast && <div className="toast">Settings saved! 🎉</div>}
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }

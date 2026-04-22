@@ -1,17 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import { open } from "@tauri-apps/plugin-shell";
+import { MessageCircle, Plug, Puzzle, Code2, Settings, Circle, ExternalLink } from "lucide-react";
 import { useGatewayStatus } from "./useGatewayStatus";
-import {
-  IconChat,
-  IconApps,
-  IconSkills,
-  IconDeveloper,
-  IconSettings,
-  IconRefresh,
-} from "./icons";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import Chat from "./pages/Chat";
 import ConnectedApps from "./pages/ConnectedApps";
 import Skills from "./pages/Skills";
-import Settings from "./pages/Settings";
+import SettingsPage from "./pages/Settings";
 
 type NavId = "chat" | "apps" | "skills" | "developer" | "settings";
 
@@ -22,16 +19,16 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "chat", label: "Chat", icon: <IconChat /> },
-  { id: "apps", label: "Connected Apps", icon: <IconApps /> },
-  { id: "skills", label: "Skills", icon: <IconSkills /> },
-  { id: "developer", label: "Developer", icon: <IconDeveloper /> },
-  { id: "settings", label: "Settings", icon: <IconSettings /> },
+  { id: "chat", label: "Chat", icon: <MessageCircle size={16} /> },
+  { id: "apps", label: "Connected Apps", icon: <Plug size={16} /> },
+  { id: "skills", label: "Skills", icon: <Puzzle size={16} /> },
+  { id: "developer", label: "Developer", icon: <Code2 size={16} /> },
+  { id: "settings", label: "Settings", icon: <Settings size={16} /> },
 ];
 
 const GATEWAY_URL = "http://localhost:18789";
+const GATEWAY_TOKEN = "REDACTED_TOKEN";
 
-// --- Loading Screen ---
 function LoadingScreen() {
   return (
     <div className="loading-screen">
@@ -44,64 +41,93 @@ function LoadingScreen() {
         <div className="dot" />
         <div className="dot" />
       </div>
-      <div className="loading-message">Starting up&hellip;</div>
+      <div className="loading-message">Starting up…</div>
     </div>
   );
 }
 
-// --- Developer Page ---
 function DeveloperPage({ gatewayUp }: { gatewayUp: boolean }) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [frameKey, setFrameKey] = useState(0);
+  function openGateway() {
+    open(GATEWAY_URL).catch(() => window.open(GATEWAY_URL));
+  }
 
-  const reload = () => setFrameKey((k) => k + 1);
+  const tokenMasked = GATEWAY_TOKEN.slice(0, 8) + "…" + GATEWAY_TOKEN.slice(-6);
 
   return (
-    <div className="developer-page">
-      <div className="dev-toolbar">
-        <div className="url-bar">{GATEWAY_URL}</div>
-        <button className="reload-btn" onClick={reload} title="Reload">
-          <IconRefresh />
-        </button>
+    <div className="p-6 max-w-2xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Developer</h1>
+        <p className="text-sm text-gray-500 mt-1">Gateway connection details and diagnostic tools</p>
       </div>
-      {gatewayUp ? (
-        <iframe
-          key={frameKey}
-          ref={iframeRef}
-          className="gateway-frame"
-          src={GATEWAY_URL}
-          title="OpenClaw Gateway UI"
-        />
-      ) : (
-        <div className="gateway-offline">
-          <div className="offline-icon">⚡</div>
-          <div className="offline-title">Gateway offline</div>
-          <div className="offline-desc">
-            Waiting for gateway at {GATEWAY_URL}&hellip;
-          </div>
-        </div>
-      )}
+
+      <div className="space-y-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Gateway Status</CardTitle>
+              <Badge variant={gatewayUp ? "success" : "destructive"}>
+                {gatewayUp ? "Online" : "Offline"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-0">
+            <div className="flex justify-between items-center py-2.5 border-b border-gray-100">
+              <span className="text-sm font-medium text-gray-600">URL</span>
+              <span className="text-sm font-mono text-gray-800">{GATEWAY_URL}</span>
+            </div>
+            <div className="flex justify-between items-center py-2.5 border-b border-gray-100">
+              <span className="text-sm font-medium text-gray-600">Health endpoint</span>
+              <span className="text-sm font-mono text-gray-500">GET /health</span>
+            </div>
+            <div className="flex justify-between items-center py-2.5">
+              <span className="text-sm font-medium text-gray-600">Token</span>
+              <span className="text-sm font-mono text-gray-500">{tokenMasked}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Button
+          onClick={openGateway}
+          disabled={!gatewayUp}
+          className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+          size="lg"
+        >
+          <ExternalLink size={16} />
+          Open Gateway Dashboard
+        </Button>
+
+        {!gatewayUp && (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="pt-4 pb-4">
+              <CardDescription className="text-amber-700 text-center">
+                Gateway is offline. Waiting for it to start at {GATEWAY_URL}…
+              </CardDescription>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
 
-// --- Status Dot ---
 function StatusDot({ status }: { status: "up" | "down" | "checking" }) {
   const label =
-    status === "up"
-      ? "Gateway running"
-      : status === "down"
-        ? "Gateway offline"
-        : "Checking…";
+    status === "up" ? "Gateway running" :
+    status === "down" ? "Gateway offline" :
+    "Checking…";
+  const color =
+    status === "up" ? "text-emerald-500" :
+    status === "down" ? "text-red-400" :
+    "text-amber-400";
+
   return (
     <div className="sidebar-footer">
-      <div className={`status-dot ${status}`} />
+      <Circle size={8} className={`${color} fill-current`} />
       <span className="status-label">{label}</span>
     </div>
   );
 }
 
-// --- App ---
 export default function App() {
   const gatewayStatus = useGatewayStatus();
   const [activeNav, setActiveNav] = useState<NavId>("chat");
@@ -122,16 +148,11 @@ export default function App() {
 
   const renderContent = () => {
     switch (activeNav) {
-      case "chat":
-        return <Chat />;
-      case "apps":
-        return <ConnectedApps />;
-      case "skills":
-        return <Skills />;
-      case "developer":
-        return <DeveloperPage gatewayUp={gatewayStatus === "up"} />;
-      case "settings":
-        return <Settings />;
+      case "chat": return <Chat />;
+      case "apps": return <ConnectedApps />;
+      case "skills": return <Skills />;
+      case "developer": return <DeveloperPage gatewayUp={gatewayStatus === "up"} />;
+      case "settings": return <SettingsPage />;
     }
   };
 
