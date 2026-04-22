@@ -41,9 +41,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       );
       if (!installed) {
         setStep("installing");
-        if (plt === "macos") {
-          startInstall();
-        }
+        startInstall();
         return;
       }
 
@@ -88,7 +86,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       }
     });
 
-    invoke("install_openclaw_mac").catch(() => {
+    invoke("install_openclaw").catch(() => {
       setInstallError(true);
       setProgress(0);
     });
@@ -194,44 +192,9 @@ function InstallingStep({
   onSkip: () => void;
 }) {
   const manualCmd =
-    platform === "windows" ? "winget install openclaw" : "brew install openclaw";
-
-  if (platform !== "macos") {
-    return (
-      <Card className="w-full max-w-md shadow-lg border-0">
-        <CardHeader className="text-center pb-2">
-          <div className="text-5xl mb-2">🦞</div>
-          <CardTitle className="text-xl">Install OpenClaw</CardTitle>
-          <CardDescription>
-            Run this command in your terminal to install OpenClaw.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="bg-gray-900 text-green-400 rounded-lg p-3 font-mono text-sm flex items-center justify-between gap-2">
-            <span className="truncate">{manualCmd}</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-gray-400 hover:text-white h-7 px-2 shrink-0"
-              onClick={() => onCopy(manualCmd)}
-            >
-              {copied ? <Check size={14} /> : <Copy size={14} />}
-            </Button>
-          </div>
-          <p className="text-xs text-gray-400 text-center">
-            After installation, restart OpenClaw Desktop.
-          </p>
-          <Button
-            variant="ghost"
-            className="w-full text-gray-400 text-sm"
-            onClick={onSkip}
-          >
-            I've already installed it — skip this step
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
+    platform === "windows"
+      ? "iwr -useb https://openclaw.ai/install.ps1 | iex"
+      : "curl -fsSL https://openclaw.ai/install.sh | bash";
 
   return (
     <Card className="w-full max-w-md shadow-lg border-0">
@@ -242,8 +205,8 @@ function InstallingStep({
         </CardTitle>
         <CardDescription>
           {error
-            ? "Something went wrong. Please install manually using Homebrew."
-            : "Installing via Homebrew, this takes about a minute."}
+            ? "The automatic install did not complete. Open a terminal and run:"
+            : "Running the official installer, this takes about a minute."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -251,12 +214,12 @@ function InstallingStep({
         {error && (
           <>
             <div className="bg-gray-900 text-green-400 rounded-lg p-3 font-mono text-sm flex items-center justify-between gap-2">
-              <span>brew install openclaw</span>
+              <span className="truncate">{manualCmd}</span>
               <Button
                 size="sm"
                 variant="ghost"
                 className="text-gray-400 hover:text-white h-7 px-2 shrink-0"
-                onClick={() => onCopy("brew install openclaw")}
+                onClick={() => onCopy(manualCmd)}
               >
                 {copied ? <Check size={14} /> : <Copy size={14} />}
               </Button>

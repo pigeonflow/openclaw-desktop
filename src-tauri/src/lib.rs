@@ -3,12 +3,19 @@ use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
 fn check_openclaw_installed() -> bool {
-    std::path::Path::new("/opt/homebrew/bin/openclaw").exists()
-        || std::process::Command::new("which")
-            .arg("openclaw")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
+    // Mac/Linux common paths
+    if std::path::Path::new("/opt/homebrew/bin/openclaw").exists()
+        || std::path::Path::new("/usr/local/bin/openclaw").exists()
+    {
+        return true;
+    }
+    // Check via which/where
+    let cmd = if cfg!(windows) { "where" } else { "which" };
+    std::process::Command::new(cmd)
+        .arg("openclaw")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -17,25 +24,39 @@ fn get_platform() -> String {
 }
 
 #[tauri::command]
-fn install_openclaw_mac(window: tauri::WebviewWindow) {
+fn install_openclaw(window: tauri::WebviewWindow) {
     std::thread::spawn(move || {
-        let brew = if std::path::Path::new("/opt/homebrew/bin/brew").exists() {
-            "/opt/homebrew/bin/brew"
+        let os = std::env::consts::OS;
+
+        let success = if os == "windows" {
+            // Windows: run the official PowerShell installer
+            std::process::Command::new("powershell")
+                .args([
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy", "Bypass",
+                    "-Command",
+                    "iwr -useb https://openclaw.ai/install.ps1 | iex"
+                ])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
         } else {
-            "brew"
+            // macOS / Linux: run the official shell installer
+            std::process::Command::new("bash")
+                .args([
+                    "-c",
+                    "curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard"
+                ])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
         };
 
-        let status = std::process::Command::new(brew)
-            .args(["install", "openclaw"])
-            .status();
-
-        match status {
-            Ok(s) if s.success() => {
-                window.emit("install-progress", "done").ok();
-            }
-            _ => {
-                window.emit("install-progress", "error").ok();
-            }
+        if success {
+            window.emit("install-progress", "done").ok();
+        } else {
+            window.emit("install-progress", "error").ok();
         }
     });
 }
@@ -110,7 +131,7 @@ pub fn run() {
             get_config,
             check_openclaw_installed,
             get_platform,
-            install_openclaw_mac,
+            install_openclaw,
             check_openclaw_configured,
             save_openrouter_key,
             init_openclaw_workspace
