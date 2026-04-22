@@ -1,9 +1,21 @@
 use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 
+#[tauri::command]
+fn get_channels() -> String {
+    let output = std::process::Command::new("openclaw")
+        .args(&["channels", "list", "--json"])
+        .output();
+    match output {
+        Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
+        Err(_) => "{}".to_string(),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![get_channels])
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let shell = app.shell();

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -79,8 +80,6 @@ const APPS: AppDef[] = [
   },
 ];
 
-const GATEWAY_TOKEN = "REDACTED_TOKEN";
-
 export default function ConnectedApps() {
   const [telegramConnected, setTelegramConnected] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
@@ -89,39 +88,9 @@ export default function ConnectedApps() {
   const checkTelegramStatus = useCallback(async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("openclaw-gateway-token") || GATEWAY_TOKEN;
-      const r = await fetch("/gateway/tools/invoke", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          tool: "sessions_list",
-          action: "json",
-          args: { kinds: ["direct"] },
-          sessionKey: "main",
-        }),
-        signal: AbortSignal.timeout(8000),
-      });
-
-      if (!r.ok) {
-        setTelegramConnected(false);
-        return;
-      }
-
-      const data = await r.json() as {
-        content?: { type: string; text: string }[];
-      };
-
-      const text = data.content?.[0]?.text;
-      if (!text) {
-        setTelegramConnected(false);
-        return;
-      }
-
-      const sessions = JSON.parse(text) as { origin?: { provider?: string } }[];
-      const hasTelegram = sessions.some((s) => s.origin?.provider === "telegram");
+      const result = await invoke<string>("get_channels");
+      const data = JSON.parse(result) as { chat?: { telegram?: unknown[] } };
+      const hasTelegram = Array.isArray(data?.chat?.telegram) && data.chat.telegram.length > 0;
       setTelegramConnected(hasTelegram);
     } catch {
       setTelegramConnected(false);

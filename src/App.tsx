@@ -47,7 +47,16 @@ function LoadingScreen() {
 }
 
 function DeveloperPage({ gatewayUp }: { gatewayUp: boolean }) {
-  function openGateway() {
+  const [copied, setCopied] = useState(false);
+
+  async function openGateway() {
+    try {
+      await navigator.clipboard.writeText(GATEWAY_TOKEN);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 4000);
+    } catch {
+      // clipboard not available, proceed anyway
+    }
     open(GATEWAY_URL).catch(() => window.open(GATEWAY_URL));
   }
 
@@ -93,8 +102,18 @@ function DeveloperPage({ gatewayUp }: { gatewayUp: boolean }) {
           size="lg"
         >
           <ExternalLink size={16} />
-          Open Gateway Dashboard
+          Copy token &amp; open dashboard
         </Button>
+
+        {copied && (
+          <Card className="border-emerald-200 bg-emerald-50">
+            <CardContent className="pt-4 pb-4">
+              <CardDescription className="text-emerald-700 text-center">
+                Your token has been copied — paste it when prompted by the dashboard.
+              </CardDescription>
+            </CardContent>
+          </Card>
+        )}
 
         {!gatewayUp && (
           <Card className="border-amber-200 bg-amber-50">

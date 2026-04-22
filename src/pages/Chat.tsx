@@ -84,9 +84,7 @@ export default function Chat() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          model: "auto",
           messages: historyForAPI,
-          stream: false,
         }),
         signal: AbortSignal.timeout(30000),
       });
