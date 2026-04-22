@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-shell";
 import { MessageCircle, Plug, Puzzle, Code2, Settings, Circle, ExternalLink } from "lucide-react";
 import { useGatewayStatus } from "./useGatewayStatus";
@@ -9,6 +10,7 @@ import Chat from "./pages/Chat";
 import ConnectedApps from "./pages/ConnectedApps";
 import Skills from "./pages/Skills";
 import SettingsPage from "./pages/Settings";
+import Onboarding from "./Onboarding";
 
 type NavId = "chat" | "apps" | "skills" | "developer" | "settings";
 
@@ -29,7 +31,7 @@ const NAV_ITEMS: NavItem[] = [
 const GATEWAY_URL = "http://localhost:18789";
 const GATEWAY_TOKEN = "REDACTED_TOKEN";
 
-function LoadingScreen() {
+function LoadingScreen({ message = "Starting up…" }: { message?: string }) {
   return (
     <div className="loading-screen">
       <div className="loading-logo">
@@ -41,7 +43,7 @@ function LoadingScreen() {
         <div className="dot" />
         <div className="dot" />
       </div>
-      <div className="loading-message">Starting up…</div>
+      <div className="loading-message">{message}</div>
     </div>
   );
 }
@@ -151,6 +153,21 @@ export default function App() {
   const gatewayStatus = useGatewayStatus();
   const [activeNav, setActiveNav] = useState<NavId>("chat");
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  // null = still checking, false = needs onboarding, true = setup complete
+  const [setupDone, setSetupDone] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    async function checkSetup() {
+      const installed = await invoke<boolean>("check_openclaw_installed").catch(() => true);
+      if (!installed) {
+        setSetupDone(false);
+        return;
+      }
+      const configured = await invoke<boolean>("check_openclaw_configured").catch(() => true);
+      setSetupDone(configured);
+    }
+    checkSetup();
+  }, []);
 
   useEffect(() => {
     if (gatewayStatus === "up") {
@@ -160,6 +177,14 @@ export default function App() {
     const timeout = setTimeout(() => setIsInitialLoading(false), 8000);
     return () => clearTimeout(timeout);
   }, [gatewayStatus]);
+
+  if (setupDone === null) {
+    return <LoadingScreen message="Checking setup…" />;
+  }
+
+  if (!setupDone) {
+    return <Onboarding onComplete={() => setSetupDone(true)} />;
+  }
 
   if (isInitialLoading) {
     return <LoadingScreen />;
