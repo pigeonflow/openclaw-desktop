@@ -89,8 +89,10 @@ export default function ConnectedApps() {
     setLoading(true);
     try {
       const result = await invoke<string>("get_channels");
-      const data = JSON.parse(result) as { chat?: { telegram?: unknown[] } };
-      const hasTelegram = Array.isArray(data?.chat?.telegram) && data.chat.telegram.length > 0;
+      const data = JSON.parse(result) as Record<string, unknown>;
+      // openclaw.json has channels at top level e.g. data.channels.telegram or data.telegram
+      const ch = (data?.channels ?? data) as Record<string, unknown>;
+      const hasTelegram = ch?.telegram != null;
       setTelegramConnected(hasTelegram);
     } catch {
       setTelegramConnected(false);

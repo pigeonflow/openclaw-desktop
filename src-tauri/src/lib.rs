@@ -3,11 +3,11 @@ use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
 fn get_channels() -> String {
-    let output = std::process::Command::new("openclaw")
-        .args(&["channels", "list", "--json"])
-        .output();
-    match output {
-        Ok(o) => String::from_utf8_lossy(&o.stdout).to_string(),
+    // Read openclaw.json directly — instant, no subprocess overhead
+    let home = std::env::var("HOME").unwrap_or_default();
+    let config_path = format!("{}/.openclaw/openclaw.json", home);
+    match std::fs::read_to_string(&config_path) {
+        Ok(contents) => contents,
         Err(_) => "{}".to_string(),
     }
 }
