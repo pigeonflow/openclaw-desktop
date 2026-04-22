@@ -1,0 +1,23 @@
+#!/bin/bash
+# OpenClaw gateway sidecar wrapper
+# Finds the openclaw binary in common locations and runs it
+
+OPENCLAW_BIN=""
+
+# Check common locations
+for candidate in \
+  "/opt/homebrew/bin/openclaw" \
+  "/usr/local/bin/openclaw" \
+  "$(which openclaw 2>/dev/null)"; do
+  if [ -x "$candidate" ]; then
+    OPENCLAW_BIN="$candidate"
+    break
+  fi
+done
+
+if [ -z "$OPENCLAW_BIN" ]; then
+  echo "[openclaw-sidecar] ERROR: openclaw binary not found" >&2
+  exit 1
+fi
+
+exec "$OPENCLAW_BIN" "$@"
