@@ -4,10 +4,6 @@
   "description": "Default capabilities for OpenClaw Desktop",
   "windows": ["main"],
   "permissions": [
-    "core:default",
-    "shell:allow-spawn",
-    "shell:allow-execute",
-    "shell:allow-open",
-    "shell:default"
+    "core:default"
   ]
 }
