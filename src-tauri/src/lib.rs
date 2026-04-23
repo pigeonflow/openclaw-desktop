@@ -100,6 +100,7 @@ fn check_openclaw_configured() -> bool {
             // Configured if any provider OR channel exists
             s.contains("\"providers\"")
                 || s.contains("\"openrouter\"")
+                || s.contains("\"openai\"")
                 || s.contains("\"github-copilot\"")
                 || s.contains("\"anthropic\"")
                 || s.contains("\"channels\"")
@@ -111,16 +112,40 @@ fn check_openclaw_configured() -> bool {
 }
 
 #[tauri::command]
-fn save_openrouter_key(key: String) -> bool {
+fn save_provider_key(provider: String, key: String) -> bool {
     let openclaw = match find_openclaw() {
         Some(p) => p,
         None => return false,
     };
+    let config_key = format!("providers.{}.apiKey", provider);
     std::process::Command::new(openclaw)
-        .args(["config", "set", "providers.openrouter.apiKey", &key])
+        .args(["config", "set", &config_key, &key])
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
+}
+
+#[tauri::command]
+fn auth_github_copilot(window: tauri::WebviewWindow) {
+    std::thread::spawn(move || {
+        let openclaw = match find_openclaw() {
+            Some(p) => p,
+            None => {
+                window.emit("auth-progress", "error").ok();
+                return;
+            }
+        };
+        let success = std::process::Command::new(&openclaw)
+            .args(["auth", "github-copilot"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if success {
+            window.emit("auth-progress", "done").ok();
+        } else {
+            window.emit("auth-progress", "error").ok();
+        }
+    });
 }
 
 #[tauri::command]
@@ -164,7 +189,8 @@ pub fn run() {
             get_platform,
             install_openclaw,
             check_openclaw_configured,
-            save_openrouter_key,
+            save_provider_key,
+            auth_github_copilot,
             init_openclaw_workspace
         ])
         .plugin(tauri_plugin_opener::init())

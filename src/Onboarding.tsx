@@ -12,9 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { ExternalLink, Copy, Check } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 
-type Step = "checking" | "installing" | "openrouter" | "done";
+type Step = "checking" | "installing" | "provider" | "done";
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -25,9 +25,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [platform, setPlatform] = useState<string>("macos");
   const [installError, setInstallError] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [apiKey, setApiKey] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState(false);
   const [copied, setCopied] = useState(false);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -49,7 +46,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         "check_openclaw_configured"
       ).catch(() => false);
       if (!configured) {
-        setStep("openrouter");
+        setStep("provider");
         return;
       }
 
@@ -79,7 +76,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       if (event.payload === "done") {
         setProgress(100);
         await new Promise((r) => setTimeout(r, 600));
-        setStep("openrouter");
+        setStep("provider");
       } else {
         setInstallError(true);
         setProgress(0);
@@ -92,27 +89,12 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     });
   }
 
-  async function handleSaveKey() {
-    if (!apiKey.trim()) return;
-    setSaving(true);
-    setSaveError(false);
-
-    await invoke("init_openclaw_workspace").catch(() => {});
-
-    const ok = await invoke<boolean>("save_openrouter_key", {
-      key: apiKey.trim(),
-    }).catch(() => false);
-    setSaving(false);
-
-    if (ok) {
-      setStep("done");
-      setTimeout(onComplete, 2000);
-    } else {
-      setSaveError(true);
-    }
+  function handleSkip() {
+    setStep("done");
+    setTimeout(onComplete, 1500);
   }
 
-  function handleSkip() {
+  function handleProviderDone() {
     setStep("done");
     setTimeout(onComplete, 1500);
   }
@@ -136,15 +118,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           onSkip={handleSkip}
         />
       )}
-      {step === "openrouter" && (
-        <OpenRouterStep
-          apiKey={apiKey}
-          setApiKey={setApiKey}
-          onSave={handleSaveKey}
-          onSkip={handleSkip}
-          saving={saving}
-          error={saveError}
-        />
+      {step === "provider" && (
+        <ProviderStep onComplete={handleProviderDone} onSkip={handleSkip} />
       )}
       {step === "done" && <DoneStep />}
     </div>
@@ -238,73 +213,198 @@ function InstallingStep({
   );
 }
 
-function OpenRouterStep({
-  apiKey,
-  setApiKey,
-  onSave,
+type ActiveProvider = "openai" | "anthropic" | "openrouter" | "github-copilot" | null;
+
+const KEY_URLS: Record<string, string> = {
+  openai: "https://platform.openai.com/api-keys",
+  anthropic: "https://console.anthropic.com/api-keys",
+  openrouter: "https://openrouter.ai/keys",
+};
+
+const KEY_PLACEHOLDERS: Record<string, string> = {
+  openai: "sk-...",
+  anthropic: "sk-ant-...",
+  openrouter: "sk-or-...",
+};
+
+const KEY_LABELS: Record<string, string> = {
+  openai: "OpenAI API key",
+  anthropic: "Anthropic API key",
+  openrouter: "OpenRouter API key",
+};
+
+function ProviderStep({
+  onComplete,
   onSkip,
-  saving,
-  error,
 }: {
-  apiKey: string;
-  setApiKey: (k: string) => void;
-  onSave: () => void;
+  onComplete: () => void;
   onSkip: () => void;
-  saving: boolean;
-  error: boolean;
 }) {
+  const [active, setActive] = useState<ActiveProvider>(null);
+  const [key, setKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [githubWaiting, setGithubWaiting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function selectProvider(provider: ActiveProvider) {
+    setError(null);
+
+    if (provider === "github-copilot") {
+      setActive("github-copilot");
+      setGithubWaiting(true);
+      const unlisten = await listen<string>("auth-progress", (event) => {
+        unlisten();
+        setGithubWaiting(false);
+        if (event.payload === "done") {
+          onComplete();
+        } else {
+          setError("GitHub authentication failed. Try again.");
+          setActive(null);
+        }
+      });
+      invoke("auth_github_copilot").catch(() => {
+        unlisten();
+        setGithubWaiting(false);
+        setError("Could not start GitHub auth. Is openclaw installed?");
+        setActive(null);
+      });
+      return;
+    }
+
+    setActive(provider);
+    setKey("");
+    if (provider) openUrl(KEY_URLS[provider]);
+  }
+
+  async function saveKey() {
+    if (!key.trim() || !active || active === "github-copilot") return;
+    setSaving(true);
+    setError(null);
+    await invoke("init_openclaw_workspace").catch(() => {});
+    const ok = await invoke<boolean>("save_provider_key", {
+      provider: active,
+      key: key.trim(),
+    }).catch(() => false);
+    setSaving(false);
+    if (ok) {
+      onComplete();
+    } else {
+      setError("Failed to save. Is openclaw installed?");
+    }
+  }
+
+  const mainProviders: { id: ActiveProvider; label: string; icon: string; sub: string }[] = [
+    { id: "openai", label: "OpenAI", icon: "🤖", sub: "GPT-4o, o3 and more" },
+    { id: "anthropic", label: "Claude", icon: "🪬", sub: "Claude 3.5, Claude 4" },
+    { id: "github-copilot", label: "GitHub Copilot", icon: "🐙", sub: "Sign in with GitHub" },
+  ];
+
+  const freeProviders: { id: ActiveProvider; label: string; sub: string }[] = [
+    { id: "openrouter", label: "OpenRouter", sub: "Free models — no credit card" },
+    { id: "github-copilot", label: "GitHub Copilot", sub: "Free tier available" },
+  ];
+
+  const needsKey = active && active !== "github-copilot";
+
   return (
     <Card className="w-full max-w-md shadow-lg border-0">
       <CardHeader className="text-center pb-4">
         <div className="text-5xl mb-2">🦞</div>
         <CardTitle className="text-xl">Connect your AI brain</CardTitle>
-        <CardDescription className="text-sm leading-relaxed">
-          OpenClaw needs an AI provider. OpenRouter offers free models — no
-          credit card needed.
-        </CardDescription>
+        <CardDescription>Choose a provider to power OpenClaw.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <Button
-          variant="outline"
-          className="w-full border-orange-200 text-orange-600 hover:bg-orange-50"
-          onClick={() => openUrl("https://openrouter.ai/keys")}
-        >
-          <ExternalLink size={14} />
-          Get a free API key →
-        </Button>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-gray-700">
-            OpenRouter API key
-          </label>
-          <Input
-            type="password"
-            placeholder="sk-or-..."
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onSave()}
-            className="font-mono"
-          />
-          {error && (
-            <p className="text-xs text-red-500">
-              Failed to save key. Is openclaw installed and on your PATH?
-            </p>
-          )}
+      <CardContent className="space-y-5">
+        {/* Main provider grid */}
+        <div className="grid grid-cols-3 gap-2">
+          {mainProviders.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => selectProvider(p.id)}
+              disabled={githubWaiting}
+              className={`flex flex-col items-center gap-1 rounded-xl border p-3 text-center transition-all ${
+                active === p.id
+                  ? "border-orange-400 bg-orange-50 ring-1 ring-orange-300"
+                  : "border-gray-200 hover:border-orange-200 hover:bg-orange-50/50"
+              }`}
+            >
+              <span className="text-2xl">{p.icon}</span>
+              <span className="text-xs font-semibold text-gray-800">{p.label}</span>
+              <span className="text-[10px] text-gray-400 leading-tight">{p.sub}</span>
+            </button>
+          ))}
         </div>
 
-        <Button
-          className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-          onClick={onSave}
-          disabled={!apiKey.trim() || saving}
-        >
-          {saving ? "Saving…" : "Continue →"}
-        </Button>
+        {/* API key input — shown for key-based providers */}
+        {needsKey && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">
+              {KEY_LABELS[active!]}
+            </label>
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                placeholder={KEY_PLACEHOLDERS[active!]}
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && saveKey()}
+                className="font-mono"
+                autoFocus
+              />
+              <Button
+                onClick={saveKey}
+                disabled={!key.trim() || saving}
+                className="bg-orange-600 hover:bg-orange-700 text-white shrink-0"
+              >
+                {saving ? "…" : "Save"}
+              </Button>
+            </div>
+            <p className="text-[11px] text-gray-400">
+              Your API key page was opened in the browser — paste it above.
+            </p>
+          </div>
+        )}
+
+        {/* GitHub Copilot waiting indicator */}
+        {githubWaiting && (
+          <div className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 p-3">
+            <div className="h-4 w-4 rounded-full border-2 border-orange-400 border-t-transparent animate-spin shrink-0" />
+            <p className="text-sm text-orange-700">
+              Waiting for GitHub authorization in your browser…
+            </p>
+          </div>
+        )}
+
+        {error && <p className="text-xs text-red-500">{error}</p>}
+
+        {/* Free tier section */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-gray-400">
+            ✨ New to this? Start for free:
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {freeProviders.map((p) => (
+              <button
+                key={p.id + "-free"}
+                onClick={() => selectProvider(p.id)}
+                disabled={githubWaiting}
+                className={`flex flex-col items-start rounded-lg border px-3 py-2 text-left transition-all ${
+                  active === p.id
+                    ? "border-orange-400 bg-orange-50"
+                    : "border-gray-200 hover:border-orange-200 hover:bg-orange-50/50"
+                }`}
+              >
+                <span className="text-xs font-semibold text-gray-700">{p.label}</span>
+                <span className="text-[10px] text-gray-400">{p.sub}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
         <button
           className="w-full text-xs text-gray-400 hover:text-gray-600 py-1 transition-colors"
           onClick={onSkip}
         >
-          Skip setup — I'll configure this later
+          Skip — I'll configure this later
         </button>
       </CardContent>
     </Card>
