@@ -1,21 +1,47 @@
 use tauri::Emitter;
-use tauri_plugin_shell::ShellExt;
+
+fn find_openclaw() -> Option<String> {
+    // Well-known install paths (Mac/Linux)
+    let candidates = [
+        "/opt/homebrew/bin/openclaw",
+        "/usr/local/bin/openclaw",
+        "/usr/bin/openclaw",
+    ];
+    for path in &candidates {
+        if std::path::Path::new(path).exists() {
+            return Some(path.to_string());
+        }
+    }
+    // Home-local bin (~/.local/bin/openclaw)
+    if let Ok(home) = std::env::var("HOME") {
+        let p = format!("{}/.local/bin/openclaw", home);
+        if std::path::Path::new(&p).exists() {
+            return Some(p);
+        }
+    }
+    // Windows: %LOCALAPPDATA%\Programs\openclaw\openclaw.exe
+    #[cfg(windows)]
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        let p = format!(r"{}\Programs\openclaw\openclaw.exe", local);
+        if std::path::Path::new(&p).exists() {
+            return Some(p);
+        }
+    }
+    // Fall back to PATH
+    let which_cmd = if cfg!(windows) { "where" } else { "which" };
+    std::process::Command::new(which_cmd)
+        .arg("openclaw")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.lines().next().unwrap_or("").trim().to_string())
+        .filter(|s| !s.is_empty())
+}
 
 #[tauri::command]
 fn check_openclaw_installed() -> bool {
-    // Mac/Linux common paths
-    if std::path::Path::new("/opt/homebrew/bin/openclaw").exists()
-        || std::path::Path::new("/usr/local/bin/openclaw").exists()
-    {
-        return true;
-    }
-    // Check via which/where
-    let cmd = if cfg!(windows) { "where" } else { "which" };
-    std::process::Command::new(cmd)
-        .arg("openclaw")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    find_openclaw().is_some()
 }
 
 #[tauri::command]
@@ -136,29 +162,19 @@ pub fn run() {
             save_openrouter_key,
             init_openclaw_workspace
         ])
-        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
-            let shell = app.shell();
-
             if is_gateway_running(18789) {
-                println!("[openclaw] gateway already running on port 18789, skipping sidecar");
-            } else {
-                // Spawn the openclaw gateway sidecar.
-                // Tauri resolves "binaries/openclaw" → binaries/openclaw-<triple> at runtime.
-                match shell
-                    .sidecar("binaries/openclaw")
-                    .expect("failed to create openclaw sidecar command")
+                println!("[openclaw] gateway already running on port 18789, skipping");
+            } else if let Some(openclaw) = find_openclaw() {
+                match std::process::Command::new(&openclaw)
                     .args(["gateway", "run"])
                     .spawn()
                 {
-                    Ok((_rx, _child)) => {
-                        println!("[openclaw] gateway sidecar started");
-                    }
-                    Err(e) => {
-                        eprintln!("[openclaw] failed to start gateway sidecar: {e}");
-                        eprintln!("[openclaw] the app will still launch — check that openclaw is installed");
-                    }
+                    Ok(_) => println!("[openclaw] gateway started via {}", openclaw),
+                    Err(e) => eprintln!("[openclaw] failed to start gateway: {e}"),
                 }
+            } else {
+                println!("[openclaw] not installed yet — onboarding will handle installation");
             }
 
             // Open devtools in debug builds
