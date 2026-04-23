@@ -125,6 +125,43 @@ fn save_provider_key(provider: String, key: String) -> bool {
         .unwrap_or(false)
 }
 
+// Open `cmd` in a system terminal window so the CLI gets a proper TTY.
+fn open_in_terminal(cmd: &str) -> bool {
+    if cfg!(target_os = "macos") {
+        // Escape single quotes inside cmd (path should never have them, but be safe)
+        let safe = cmd.replace('\'', "'\\''");
+        let script = format!(
+            "tell application \"Terminal\"\nactivate\ndo script \"{}\"\nend tell",
+            safe.replace('"', "\\\"")
+        );
+        std::process::Command::new("osascript")
+            .arg("-e").arg(&script)
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    } else if cfg!(windows) {
+        // Open a new cmd window that stays open after the command finishes
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "cmd", "/k", cmd])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    } else {
+        // Linux: try common terminal emulators
+        for (term, args) in &[
+            ("gnome-terminal", vec!["--", "bash", "-c", cmd]),
+            ("xterm",          vec!["-e", "bash", "-c", cmd]),
+            ("konsole",        vec!["--noclose", "-e", "bash", "-c", cmd]),
+            ("xfce4-terminal", vec!["-e", "bash", "-c", cmd]),
+        ] {
+            if std::process::Command::new(term).args(args).spawn().is_ok() {
+                return true;
+            }
+        }
+        false
+    }
+}
+
 #[tauri::command]
 fn auth_provider(provider: String, window: tauri::WebviewWindow) {
     std::thread::spawn(move || {
@@ -135,15 +172,32 @@ fn auth_provider(provider: String, window: tauri::WebviewWindow) {
                 return;
             }
         };
-        let success = std::process::Command::new(&openclaw)
-            .args(["models", "auth", "login", "--provider", &provider])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-        if success {
-            window.emit("auth-progress", "done").ok();
-        } else {
+
+        // Quote the binary path in case it contains spaces
+        let cmd = format!("'{}' models auth login --provider {}", openclaw, provider);
+        if !open_in_terminal(&cmd) {
             window.emit("auth-progress", "error").ok();
+            return;
+        }
+
+        // Poll `openclaw models status --check` every 3 s until a provider
+        // is valid (exit 0) or the 10-minute timeout elapses.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            if std::time::Instant::now() > deadline {
+                window.emit("auth-progress", "error").ok();
+                return;
+            }
+            let configured = std::process::Command::new(&openclaw)
+                .args(["models", "status", "--check"])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+            if configured {
+                window.emit("auth-progress", "done").ok();
+                return;
+            }
         }
     });
 }

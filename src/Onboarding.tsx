@@ -289,12 +289,6 @@ function ProviderStep({
     { id: "github-copilot", label: "GitHub Copilot", sub: "Free tier available" },
   ];
 
-  const providerLabels: Record<string, string> = {
-    "openai-codex": "OpenAI",
-    "anthropic": "Claude",
-    "github-copilot": "GitHub Copilot",
-  };
-
   return (
     <Card className="w-full max-w-md shadow-lg border-0">
       <CardHeader className="text-center pb-4">
@@ -328,7 +322,7 @@ function ProviderStep({
           <div className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 p-3">
             <div className="h-4 w-4 rounded-full border-2 border-orange-400 border-t-transparent animate-spin shrink-0" />
             <p className="text-sm text-orange-700">
-              Authenticating with {providerLabels[active!]} in your browser…
+              Follow the prompts in the terminal window that opened…
             </p>
           </div>
         )}
