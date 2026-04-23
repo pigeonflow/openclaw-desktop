@@ -228,6 +228,7 @@ function ProviderStep({
   const [key, setKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [authWaiting, setAuthWaiting] = useState(false);
+  const [authOutput, setAuthOutput] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function selectProvider(provider: ActiveProvider) {
@@ -243,8 +244,13 @@ function ProviderStep({
     // All other providers use openclaw models auth login --provider <id>
     setActive(provider);
     setAuthWaiting(true);
+    setAuthOutput("");
+    const unlistenOutput = await listen<string>("auth-output", (event) => {
+      setAuthOutput((prev) => prev + event.payload);
+    });
     const unlisten = await listen<string>("auth-progress", (event) => {
       unlisten();
+      unlistenOutput();
       setAuthWaiting(false);
       if (event.payload === "done") {
         onComplete();
@@ -255,6 +261,7 @@ function ProviderStep({
     });
     invoke("auth_provider", { provider }).catch(() => {
       unlisten();
+      unlistenOutput();
       setAuthWaiting(false);
       setError("Could not start authentication. Is openclaw installed?");
       setActive(null);
@@ -318,12 +325,21 @@ function ProviderStep({
         </div>
 
         {/* Auth waiting indicator */}
-        {authWaiting && active && (
-          <div className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 p-3">
-            <div className="h-4 w-4 rounded-full border-2 border-orange-400 border-t-transparent animate-spin shrink-0" />
-            <p className="text-sm text-orange-700">
-              Follow the prompts in the terminal window that opened…
-            </p>
+        {authWaiting && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 p-3">
+              <div className="h-4 w-4 rounded-full border-2 border-orange-400 border-t-transparent animate-spin shrink-0" />
+              <p className="text-sm text-orange-700">
+                Authenticating… complete the flow in your browser.
+              </p>
+            </div>
+            {authOutput && (
+              <div className="bg-gray-950 rounded-lg p-3 max-h-28 overflow-y-auto">
+                <pre className="text-green-400 text-[11px] font-mono whitespace-pre-wrap leading-relaxed">
+                  {authOutput}
+                </pre>
+              </div>
+            )}
           </div>
         )}
 

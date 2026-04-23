@@ -1,4 +1,4 @@
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 fn find_openclaw() -> Option<String> {
     // Well-known install paths (Mac/Linux)
@@ -125,46 +125,34 @@ fn save_provider_key(provider: String, key: String) -> bool {
         .unwrap_or(false)
 }
 
-// Open `cmd` in a system terminal window so the CLI gets a proper TTY.
-fn open_in_terminal(cmd: &str) -> bool {
-    if cfg!(target_os = "macos") {
-        // Escape single quotes inside cmd (path should never have them, but be safe)
-        let safe = cmd.replace('\'', "'\\''");
-        let script = format!(
-            "tell application \"Terminal\"\nactivate\ndo script \"{}\"\nend tell",
-            safe.replace('"', "\\\"")
-        );
-        std::process::Command::new("osascript")
-            .arg("-e").arg(&script)
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
-    } else if cfg!(windows) {
-        // Open a new cmd window that stays open after the command finishes
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "cmd", "/k", cmd])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
-    } else {
-        // Linux: try common terminal emulators
-        for (term, args) in &[
-            ("gnome-terminal", vec!["--", "bash", "-c", cmd]),
-            ("xterm",          vec!["-e", "bash", "-c", cmd]),
-            ("konsole",        vec!["--noclose", "-e", "bash", "-c", cmd]),
-            ("xfce4-terminal", vec!["-e", "bash", "-c", cmd]),
-        ] {
-            if std::process::Command::new(term).args(args).spawn().is_ok() {
-                return true;
+// Strip ANSI escape codes so terminal output is readable in the UI.
+fn strip_ansi(bytes: &[u8]) -> String {
+    let s = String::from_utf8_lossy(bytes);
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                while let Some(&ch) = chars.peek() {
+                    chars.next();
+                    if ch.is_ascii_alphabetic() { break; }
+                }
             }
+            // skip other ESC sequences
+        } else {
+            out.push(c);
         }
-        false
     }
+    out
 }
 
 #[tauri::command]
 fn auth_provider(provider: String, window: tauri::WebviewWindow) {
     std::thread::spawn(move || {
+        use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+        use std::io::Read;
+
         let openclaw = match find_openclaw() {
             Some(p) => p,
             None => {
@@ -173,31 +161,62 @@ fn auth_provider(provider: String, window: tauri::WebviewWindow) {
             }
         };
 
-        // Quote the binary path in case it contains spaces
-        let cmd = format!("'{}' models auth login --provider {}", openclaw, provider);
-        if !open_in_terminal(&cmd) {
-            window.emit("auth-progress", "error").ok();
-            return;
-        }
-
-        // Poll `openclaw models status --check` every 3 s until a provider
-        // is valid (exit 0) or the 10-minute timeout elapses.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(3));
-            if std::time::Instant::now() > deadline {
+        // Allocate a PTY so the CLI detects isTTY = true and runs normally.
+        let pty_system = native_pty_system();
+        let pair = match pty_system.openpty(PtySize {
+            rows: 24,
+            cols: 120,
+            pixel_width: 0,
+            pixel_height: 0,
+        }) {
+            Ok(p) => p,
+            Err(_) => {
                 window.emit("auth-progress", "error").ok();
                 return;
             }
-            let configured = std::process::Command::new(&openclaw)
-                .args(["models", "status", "--check"])
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false);
-            if configured {
-                window.emit("auth-progress", "done").ok();
+        };
+
+        let mut cmd = CommandBuilder::new(&openclaw);
+        cmd.args(["models", "auth", "login", "--provider", &provider]);
+
+        let mut child = match pair.slave.spawn_command(cmd) {
+            Ok(c) => c,
+            Err(_) => {
+                window.emit("auth-progress", "error").ok();
                 return;
             }
+        };
+        drop(pair.slave); // must drop so master gets EOF when child exits
+
+        // Read PTY output and forward to the frontend (device codes, instructions, etc.)
+        let window_out = window.clone();
+        let mut reader = match pair.master.try_clone_reader() {
+            Ok(r) => r,
+            Err(_) => {
+                window.emit("auth-progress", "error").ok();
+                return;
+            }
+        };
+        std::thread::spawn(move || {
+            let mut buf = vec![0u8; 1024];
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        let text = strip_ansi(&buf[..n]);
+                        if !text.trim().is_empty() {
+                            window_out.emit("auth-output", text).ok();
+                        }
+                    }
+                }
+            }
+        });
+
+        let success = child.wait().map(|s| s.success()).unwrap_or(false);
+        if success {
+            window.emit("auth-progress", "done").ok();
+        } else {
+            window.emit("auth-progress", "error").ok();
         }
     });
 }
@@ -266,6 +285,7 @@ pub fn run() {
             // Open devtools in debug builds
             #[cfg(debug_assertions)]
             if let Some(window) = app.get_webview_window("main") {
+                let window: tauri::WebviewWindow<tauri::Wry> = window;
                 window.open_devtools();
             }
 
