@@ -1,4 +1,4 @@
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
 use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
