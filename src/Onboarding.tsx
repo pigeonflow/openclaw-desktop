@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-shell";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   Card,
   CardContent,
@@ -267,7 +267,7 @@ function OpenRouterStep({
         <Button
           variant="outline"
           className="w-full border-orange-200 text-orange-600 hover:bg-orange-50"
-          onClick={() => open("https://openrouter.ai/keys")}
+          onClick={() => openUrl("https://openrouter.ai/keys")}
         >
           <ExternalLink size={14} />
           Get a free API key →

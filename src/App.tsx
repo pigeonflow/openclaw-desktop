@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-shell";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { MessageCircle, Plug, Puzzle, Code2, Settings, Circle, ExternalLink } from "lucide-react";
 import { useGatewayStatus } from "./useGatewayStatus";
 import { getGatewayToken, getGatewayUrl } from "./lib/config";
@@ -64,7 +64,7 @@ function DeveloperPage({ gatewayUp }: { gatewayUp: boolean }) {
     } catch {
       // clipboard not available, proceed anyway
     }
-    open(gatewayUrl).catch(() => window.open(gatewayUrl));
+    openUrl(gatewayUrl).catch(() => window.open(gatewayUrl));
   }
 
   const tokenMasked = token ? token.slice(0, 8) + "…" + token.slice(-6) : "—";
