@@ -126,7 +126,7 @@ fn save_provider_key(provider: String, key: String) -> bool {
 }
 
 #[tauri::command]
-fn auth_github_copilot(window: tauri::WebviewWindow) {
+fn auth_provider(provider: String, window: tauri::WebviewWindow) {
     std::thread::spawn(move || {
         let openclaw = match find_openclaw() {
             Some(p) => p,
@@ -136,7 +136,7 @@ fn auth_github_copilot(window: tauri::WebviewWindow) {
             }
         };
         let success = std::process::Command::new(&openclaw)
-            .args(["auth", "github-copilot"])
+            .args(["models", "auth", "login", "--provider", &provider])
             .status()
             .map(|s| s.success())
             .unwrap_or(false);
@@ -190,7 +190,7 @@ pub fn run() {
             install_openclaw,
             check_openclaw_configured,
             save_provider_key,
-            auth_github_copilot,
+            auth_provider,
             init_openclaw_workspace
         ])
         .plugin(tauri_plugin_opener::init())
