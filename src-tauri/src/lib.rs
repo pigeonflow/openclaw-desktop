@@ -63,7 +63,7 @@ fn install_openclaw(window: tauri::WebviewWindow) {
                     "-NonInteractive",
                     "-ExecutionPolicy", "Bypass",
                     "-Command",
-                    r"$t=[IO.Path]::Combine([IO.Path]::GetTempPath(),'oc_install.ps1'); Invoke-WebRequest -Uri 'https://openclaw.ai/install.ps1' -OutFile $t; & $t; Remove-Item $t -ErrorAction SilentlyContinue"
+                    r"$t=[IO.Path]::Combine([IO.Path]::GetTempPath(),'oc_install.ps1'); Invoke-WebRequest -Uri 'https://openclaw.ai/install.ps1' -OutFile $t; & $t --non-interactive; Remove-Item $t -ErrorAction SilentlyContinue"
                 ])
                 .status()
                 .map(|s| s.success())
@@ -73,7 +73,7 @@ fn install_openclaw(window: tauri::WebviewWindow) {
             std::process::Command::new("bash")
                 .args([
                     "-c",
-                    "curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard"
+                    "curl -fsSL https://openclaw.ai/install.sh | bash -s -- --non-interactive"
                 ])
                 .status()
                 .map(|s| s.success())
