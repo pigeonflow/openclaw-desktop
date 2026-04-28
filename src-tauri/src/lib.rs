@@ -19,12 +19,22 @@ fn find_openclaw() -> Option<String> {
             return Some(p);
         }
     }
-    // Windows: %LOCALAPPDATA%\Programs\openclaw\openclaw.exe
+    // Windows: %LOCALAPPDATA%\Programs\openclaw\openclaw.exe and %APPDATA%\npm (npm global)
     #[cfg(windows)]
-    if let Ok(local) = std::env::var("LOCALAPPDATA") {
-        let p = format!(r"{}\Programs\openclaw\openclaw.exe", local);
-        if std::path::Path::new(&p).exists() {
-            return Some(p);
+    {
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            let p = format!(r"{}\Programs\openclaw\openclaw.exe", local);
+            if std::path::Path::new(&p).exists() {
+                return Some(p);
+            }
+        }
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            for name in &["openclaw.cmd", "openclaw.exe"] {
+                let p = format!(r"{}\npm\{}", appdata, name);
+                if std::path::Path::new(&p).exists() {
+                    return Some(p);
+                }
+            }
         }
     }
     // Fall back to PATH
@@ -54,9 +64,8 @@ fn install_openclaw(window: tauri::WebviewWindow) {
     std::thread::spawn(move || {
         let os = std::env::consts::OS;
 
-        let success = if os == "windows" {
-            // Windows: download installer to a temp file, then execute it as a file.
-            // Avoids the iwr|iex inline-execution pattern that AV heuristics flag.
+        if os == "windows" {
+            // Windows: download to temp file and execute to avoid iwr|iex AV heuristics.
             std::process::Command::new("powershell")
                 .args([
                     "-NoProfile",
@@ -66,21 +75,24 @@ fn install_openclaw(window: tauri::WebviewWindow) {
                     r"$t=[IO.Path]::Combine([IO.Path]::GetTempPath(),'oc_install.ps1'); Invoke-WebRequest -Uri 'https://openclaw.ai/install.ps1' -OutFile $t; & $t --non-interactive; Remove-Item $t -ErrorAction SilentlyContinue"
                 ])
                 .status()
-                .map(|s| s.success())
-                .unwrap_or(false)
+                .ok();
         } else {
-            // macOS / Linux: run the official shell installer
+            // macOS/Linux: use a login shell so the user's full PATH is loaded
+            // (Homebrew, nvm, etc. are not visible to GUI apps otherwise).
             std::process::Command::new("bash")
                 .args([
-                    "-c",
+                    "-lc",
                     "curl -fsSL https://openclaw.ai/install.sh | bash -s -- --non-interactive"
                 ])
                 .status()
-                .map(|s| s.success())
-                .unwrap_or(false)
-        };
+                .ok();
+        }
 
-        if success {
+        // Determine success by checking whether the binary is actually present.
+        // The install script may exit non-zero due to gateway restart timeouts
+        // even when openclaw itself installed successfully — so exit code alone
+        // is unreliable.
+        if find_openclaw().is_some() {
             window.emit("install-progress", "done").ok();
         } else {
             window.emit("install-progress", "error").ok();
