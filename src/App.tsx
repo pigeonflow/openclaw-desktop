@@ -46,7 +46,7 @@ function LoadingScreen({ message = "Starting up…" }: { message?: string }) {
   );
 }
 
-function DeveloperPage({ gatewayUp }: { gatewayUp: boolean }) {
+function DeveloperPage({ gatewayUp, onResetSetup }: { gatewayUp: boolean; onResetSetup: () => void }) {
   const [copied, setCopied] = useState(false);
   const [token, setToken] = useState("");
   const [gatewayUrl, setGatewayUrl] = useState("http://localhost:18789");
@@ -131,6 +131,25 @@ function DeveloperPage({ gatewayUp }: { gatewayUp: boolean }) {
             </CardContent>
           </Card>
         )}
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Diagnostics</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-gray-700">Re-run setup wizard</div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  Re-test the install and provider auth flows without reinstalling the app
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={onResetSetup} className="shrink-0">
+                Re-run
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -200,7 +219,7 @@ export default function App() {
       case "chat": return <Chat />;
       case "apps": return <ConnectedApps />;
       case "skills": return <Skills />;
-      case "developer": return <DeveloperPage gatewayUp={gatewayStatus === "up"} />;
+      case "developer": return <DeveloperPage gatewayUp={gatewayStatus === "up"} onResetSetup={() => setSetupDone(false)} />;
       case "settings": return <SettingsPage />;
     }
   };

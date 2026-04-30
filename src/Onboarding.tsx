@@ -25,6 +25,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [platform, setPlatform] = useState<string>("macos");
   const [installError, setInstallError] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [installOutput, setInstallOutput] = useState("");
   const [copied, setCopied] = useState(false);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -59,6 +60,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
   async function startInstall() {
     setProgress(5);
+    setInstallOutput("");
     progressTimerRef.current = setInterval(() => {
       setProgress((p) => {
         if (p >= 85) {
@@ -69,8 +71,13 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       });
     }, 1200);
 
+    const unlistenOutput = await listen<string>("install-output", (event) => {
+      setInstallOutput(event.payload);
+    });
+
     const unlisten = await listen<string>("install-progress", async (event) => {
       unlisten();
+      unlistenOutput();
       clearInterval(progressTimerRef.current!);
 
       if (event.payload === "done") {
@@ -113,6 +120,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           platform={platform}
           progress={progress}
           error={installError}
+          output={installOutput}
           copied={copied}
           onCopy={copyText}
           onSkip={handleSkip}
@@ -155,6 +163,7 @@ function InstallingStep({
   platform,
   progress,
   error,
+  output,
   copied,
   onCopy,
   onSkip,
@@ -162,6 +171,7 @@ function InstallingStep({
   platform: string;
   progress: number;
   error: boolean;
+  output: string;
   copied: boolean;
   onCopy: (cmd: string) => void;
   onSkip: () => void;
@@ -199,6 +209,13 @@ function InstallingStep({
                 {copied ? <Check size={14} /> : <Copy size={14} />}
               </Button>
             </div>
+            {output && (
+              <div className="bg-gray-950 rounded-lg p-3 max-h-40 overflow-y-auto">
+                <pre className="text-red-400 text-[10px] font-mono whitespace-pre-wrap leading-relaxed">
+                  {output}
+                </pre>
+              </div>
+            )}
             <Button
               variant="ghost"
               className="w-full text-gray-400 text-sm"

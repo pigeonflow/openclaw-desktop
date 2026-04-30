@@ -62,9 +62,12 @@ fn get_platform() -> String {
 #[tauri::command]
 fn install_openclaw(window: tauri::WebviewWindow) {
     std::thread::spawn(move || {
+        use std::process::Stdio;
+
         let os = std::env::consts::OS;
 
-        if os == "windows" {
+        // Capture stdout+stderr so we can show the error in the UI on failure.
+        let output = if os == "windows" {
             // Windows: download to temp file and execute to avoid iwr|iex AV heuristics.
             std::process::Command::new("powershell")
                 .args([
@@ -72,20 +75,37 @@ fn install_openclaw(window: tauri::WebviewWindow) {
                     "-NonInteractive",
                     "-ExecutionPolicy", "Bypass",
                     "-Command",
-                    r"$t=[IO.Path]::Combine([IO.Path]::GetTempPath(),'oc_install.ps1'); Invoke-WebRequest -Uri 'https://openclaw.ai/install.ps1' -OutFile $t; & $t --non-interactive; Remove-Item $t -ErrorAction SilentlyContinue"
+                    r"$t=[IO.Path]::Combine([IO.Path]::GetTempPath(),'oc_install.ps1'); Invoke-WebRequest -UseBasicParsing -Uri 'https://openclaw.ai/install.ps1' -OutFile $t; & $t --non-interactive; Remove-Item $t -ErrorAction SilentlyContinue"
                 ])
-                .status()
-                .ok();
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output()
         } else {
-            // macOS/Linux: use a login shell so the user's full PATH is loaded
-            // (Homebrew, nvm, etc. are not visible to GUI apps otherwise).
-            std::process::Command::new("bash")
+            // Use the user's actual login shell so their full PATH is available.
+            // macOS has used zsh as default since Catalina; bash -lc wouldn't source
+            // ~/.zprofile where Homebrew and nvm configure PATH for zsh users.
+            let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+            std::process::Command::new(&shell)
                 .args([
                     "-lc",
                     "curl -fsSL https://openclaw.ai/install.sh | bash -s -- --non-interactive"
                 ])
-                .status()
-                .ok();
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output()
+        };
+
+        // Forward captured output to the UI so errors are visible without needing a terminal.
+        if let Ok(ref o) = output {
+            let mut combined = strip_ansi(&o.stdout);
+            let err = strip_ansi(&o.stderr);
+            if !err.trim().is_empty() {
+                if !combined.is_empty() { combined.push('\n'); }
+                combined.push_str(&err);
+            }
+            if !combined.trim().is_empty() {
+                window.emit("install-output", combined).ok();
+            }
         }
 
         // Determine success by checking whether the binary is actually present.
